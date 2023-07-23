@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["base","custom","field_type","safe_crack_result"]};

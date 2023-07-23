@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["test_adaptor","zip_adaptor"]};
