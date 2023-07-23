@@ -11,7 +11,9 @@
 //! ```rust
 //! use ramensky::safe_cracker::options::Options;
 //! use ramensky::safe_cracker::safe_cracker::SafeCracker;
-//! let safe_cracker = SafeCracker::build(Options::new(true, true, false, None)).unwrap();
+//! let safe_cracker = SafeCracker::build(Options::new(true, true, false, None, None)).unwrap();
+
+use crate::safe_cracker::brute_force_options::BruteForceOptions;
 
 pub struct Options<'a> {
     /// If `quiet` is true, no messages will be printed, like passwords being generated, elapsed time, or the password (if found).
@@ -24,6 +26,9 @@ pub struct Options<'a> {
     /// Whether to try to brute force the password. This will run last.
     pub try_brute_forcing: bool,
 
+    /// Brute forcing options. Will only be used if ```try_brute_forcing``` is true.
+    pub brute_forcing_options: Option<BruteForceOptions>,
+
     /// Path to a custom passwords list. If provided, this will run first.
     /// The password list file needs to be newline separated list of passwords.
     pub custom_pw_list_path: Option<&'a str>,
@@ -34,17 +39,19 @@ impl<'a> Options<'a> {
         quiet: bool,
         try_common_passwords: bool,
         try_brute_forcing: bool,
+        brute_forcing_options: Option<BruteForceOptions>,
         custom_pw_list_path: Option<&'a str>,
     ) -> Self {
         Options {
             quiet,
             try_common_passwords,
             try_brute_forcing,
+            brute_forcing_options,
             custom_pw_list_path,
         }
     }
 
     pub fn default() -> Self {
-        Self::new(false, true, true, None)
+        Self::new(false, true, true, Some(BruteForceOptions::default()), None)
     }
 }

@@ -1,10 +1,12 @@
 //! Module containing the password cracker.
 
 use std::error::Error;
+use std::path::Path;
 use std::time::Instant;
 
 use crate::adaptor::attempt_result::AttemptResult;
 use crate::adaptor::base::BaseAdaptor;
+use crate::safe_cracker::brute_forcer::BruteForcer;
 use crate::safe_cracker::options::Options;
 use crate::safe_cracker::password_crack_result::PasswordCrackResult;
 use crate::safe_cracker::password_reader::PasswordReader;
@@ -13,6 +15,7 @@ const COMMON_PW_PATH: &str = "resources/common-passwords.txt";
 
 pub struct SafeCracker<'a> {
     password_reader: PasswordReader,
+    brute_forcer: Option<BruteForcer>,
     options: Options<'a>,
 }
 
@@ -25,16 +28,32 @@ impl<'a> SafeCracker<'a> {
         }
 
         if let Some(custom_path) = options.custom_pw_list_path {
-            // TODO: Validate `custom_path`.
+            if !Path::new(custom_path).is_file() {
+                return Err(format!(
+                    "Custom password file path {custom_path} is not a valid file path."
+                ))?;
+            }
             paths.push(custom_path);
+        }
+
+        let brute_forcer;
+
+        if options.try_brute_forcing {
+            if let Some(opt) = options.brute_forcing_options {
+                brute_forcer = Some(BruteForcer::new(opt));
+            } else {
+                return Err("brute_forcing_options needs to set if try_brute_forcing is enabled.")?;
+            }
+        } else {
+            brute_forcer = None
         }
 
         Ok(Self {
             password_reader: PasswordReader::build(paths)?,
+            brute_forcer,
             options,
         })
     }
-
     /// Start password cracking.
     /// This method will generate passwords, and call the adaptors `try_password()` method for each
     /// password.
@@ -53,29 +72,37 @@ impl<'a> SafeCracker<'a> {
     /// use ramensky::safe_cracker::safe_cracker::SafeCracker;
     ///
     /// let safe_cracker = SafeCracker::build(Options::default()).unwrap();
-    /// let adaptor = TestAdaptor::new("abcde");
+    /// let adaptor = TestAdaptor::without_delay("abcde");
     /// match safe_cracker.start(adaptor).unwrap() {
     ///     PasswordCrackResult::Success(pw, elapsed) => println!("Success! Password is {pw}. Execution took {} seconds", elapsed.as_secs()),
     ///     PasswordCrackResult::Failure(elapsed) => println!("Failure. Execution took {} seconds", elapsed.as_secs()),
     /// }
     /// ```
     pub fn start<T: BaseAdaptor>(self, adaptor: T) -> Result<PasswordCrackResult, Box<dyn Error>> {
-        println!("Starting attempt..");
+        macro_rules! print_with_ts {
+            ($F:expr) => {
+                if !self.options.quiet {
+                    println!("{:?}\t{}", chrono::offset::Local::now(), $F);
+                }
+            };
+        }
+
+        print_with_ts!("Starting attempt");
+
         let now = Instant::now();
 
         for pw in self.password_reader {
-            if !self.options.quiet {
-                println!("Trying password {pw}..");
-            }
+            print_with_ts!(format!("Trying password {pw}"));
 
             let result = adaptor.try_password(&pw)?;
 
             match result {
                 AttemptResult::Success => {
-                    if !self.options.quiet {
-                        println!("Success! {pw} is the password.");
-                        println!("Execution took {} seconds.", now.elapsed().as_secs());
-                    }
+                    print_with_ts!(format!("Success! {pw} is the password."));
+                    print_with_ts!(format!(
+                        "Execution took {} seconds.",
+                        now.elapsed().as_secs()
+                    ));
 
                     return Ok(PasswordCrackResult::Success(pw, now.elapsed()));
                 }
@@ -83,10 +110,11 @@ impl<'a> SafeCracker<'a> {
             }
         }
 
-        if !self.options.quiet {
-            println!("Failure! Could not find the password.");
-            println!("Execution took {} seconds.", now.elapsed().as_secs());
-        }
+        print_with_ts!("Failure! Could not find the password.");
+        print_with_ts!(format!(
+            "Execution took {} seconds.",
+            now.elapsed().as_secs()
+        ));
         Ok(PasswordCrackResult::Failure(now.elapsed()))
     }
 }
@@ -100,10 +128,10 @@ mod tests {
 
     #[test]
     fn should_find_in_common_passwords() {
-        let safe_cracker = SafeCracker::build(Options::new(true, true, false, None)).unwrap();
+        let safe_cracker = SafeCracker::build(Options::new(true, true, false, None, None)).unwrap();
 
         // "qwerty" is the 4th item in the common passwords list.
-        let adaptor = TestAdaptor::new("qwerty");
+        let adaptor = TestAdaptor::without_delay("qwerty");
 
         let result = safe_cracker.start(adaptor).unwrap();
 
@@ -117,13 +145,26 @@ mod tests {
     }
 
     #[test]
+    fn should_validate_custom_list_path() {
+        // Not existent path
+        let custom_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/resources/pw-list-wrong.txt"
+        );
+
+        assert!(
+            SafeCracker::build(Options::new(true, false, false, None, Some(custom_path))).is_err()
+        )
+    }
+
+    #[test]
     fn should_find_in_custom_list() {
         let custom_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/resources/pw-list.txt");
         let safe_cracker =
-            SafeCracker::build(Options::new(true, false, false, Some(custom_path))).unwrap();
+            SafeCracker::build(Options::new(true, false, false, None, Some(custom_path))).unwrap();
 
         // "test2" is contained in the custom password list.
-        let adaptor = TestAdaptor::new("test2");
+        let adaptor = TestAdaptor::without_delay("test2");
 
         let result = safe_cracker.start(adaptor).unwrap();
 
