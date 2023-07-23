@@ -1,9 +1,10 @@
 //! TestAdaptor is a simple adaptor for testing and benchmarking purposes.
+//! If simply checks whether the guessed password if the initial provided password.
 
 use std::error::Error;
 
+use crate::adaptor::attempt_result::AttemptResult;
 use crate::adaptor::base::BaseAdaptor;
-use crate::adaptor::safe_crack_result::SafeCrackResult;
 
 pub struct TestAdaptor<'a> {
     password: &'a str,
@@ -16,15 +17,29 @@ impl<'a> TestAdaptor<'a> {
 }
 
 impl<'a> BaseAdaptor for TestAdaptor<'a> {
-    fn get_adaptor_name(&self) -> &str {
-        "TestAdaptor"
-    }
-
-    fn try_password(&self, password: &String) -> Result<SafeCrackResult, Box<dyn Error>> {
+    fn try_password(&self, password: &String) -> Result<AttemptResult, Box<dyn Error>> {
         if password == self.password {
-            Ok(SafeCrackResult::Success)
+            Ok(AttemptResult::Success)
         } else {
-            Ok(SafeCrackResult::Failure)
+            Ok(AttemptResult::Failure)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::adaptor::attempt_result::AttemptResult;
+    use crate::adaptor::custom::test_adaptor::TestAdaptor;
+
+    use super::*;
+
+    #[test]
+    fn can_decrypt() {
+        let adaptor = TestAdaptor::new("abcde");
+
+        matches!(
+            adaptor.try_password(&String::from("abcde")).unwrap(),
+            AttemptResult::Success
+        );
     }
 }

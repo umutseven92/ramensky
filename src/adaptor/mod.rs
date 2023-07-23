@@ -1,4 +1,4 @@
 //! Module for adaptors.
+pub mod attempt_result;
 pub mod base;
 pub mod custom;
-pub mod safe_crack_result;

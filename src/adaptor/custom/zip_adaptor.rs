@@ -5,11 +5,15 @@ use std::error::Error;
 use std::process::Command;
 use std::str;
 
+use crate::adaptor::attempt_result::AttemptResult;
 use crate::adaptor::base::BaseAdaptor;
-use crate::adaptor::safe_crack_result::SafeCrackResult;
 
 pub struct ZipAdaptor<'a> {
+    /// Path to the zip file that is encrpyted.
     zip_path: &'a str,
+
+    /// Where to extract the file, if the password is found. Needs to be a directory.
+    /// If it doesn't exist, it will be created.
     extract_path: &'a str,
 }
 
@@ -23,11 +27,7 @@ impl<'a> ZipAdaptor<'a> {
 }
 
 impl<'a> BaseAdaptor for ZipAdaptor<'a> {
-    fn get_adaptor_name(&self) -> &str {
-        "ZipAdaptor"
-    }
-
-    fn try_password(&self, password: &String) -> Result<SafeCrackResult, Box<dyn Error>> {
+    fn try_password(&self, password: &String) -> Result<AttemptResult, Box<dyn Error>> {
         let command = format!(
             "unzip -P {password} {} -d {}",
             self.zip_path, self.extract_path
@@ -37,19 +37,19 @@ impl<'a> BaseAdaptor for ZipAdaptor<'a> {
             Command::new("cmd")
                 .args(["/C", command.as_str()])
                 .output()
-                .expect("failed to execute process")
+                .expect(format!("Failed to execute command {}", command.as_str()).as_str())
         } else {
             Command::new("sh")
                 .arg("-c")
                 .arg(command.as_str())
                 .output()
-                .expect("failed to execute process")
+                .expect(format!("Failed to execute command {}", command.as_str()).as_str())
         };
 
         if output.status.success() {
-            Ok(SafeCrackResult::Success)
+            Ok(AttemptResult::Success)
         } else {
-            Ok(SafeCrackResult::Failure)
+            Ok(AttemptResult::Failure)
         }
     }
 }
@@ -58,9 +58,9 @@ impl<'a> BaseAdaptor for ZipAdaptor<'a> {
 mod tests {
     use std::fs;
 
+    use crate::adaptor::attempt_result::AttemptResult;
     use crate::adaptor::base::BaseAdaptor;
     use crate::adaptor::custom::zip_adaptor::ZipAdaptor;
-    use crate::adaptor::safe_crack_result::SafeCrackResult;
 
     #[test]
     fn can_unzip() {
@@ -69,13 +69,13 @@ mod tests {
 
         let zip_adaptor = ZipAdaptor::new(zip_path, extract_path);
 
-        // The password for the test.zip file is test.
+        // The password for the test.zip file is "test".
         let pw = String::from("test");
 
-        match zip_adaptor.try_password(&pw).unwrap() {
-            SafeCrackResult::Success => assert!(true),
-            SafeCrackResult::Failure => assert!(false),
-        }
+        matches!(
+            zip_adaptor.try_password(&pw).unwrap(),
+            AttemptResult::Success
+        );
 
         // Remove the extracted test file.
         fs::remove_file(extract_path.to_owned() + "test").unwrap();

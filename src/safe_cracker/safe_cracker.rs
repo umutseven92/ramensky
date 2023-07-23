@@ -3,9 +3,10 @@
 use std::error::Error;
 use std::time::Instant;
 
+use crate::adaptor::attempt_result::AttemptResult;
 use crate::adaptor::base::BaseAdaptor;
-use crate::adaptor::safe_crack_result::SafeCrackResult;
 use crate::safe_cracker::options::Options;
+use crate::safe_cracker::password_crack_result::PasswordCrackResult;
 use crate::safe_cracker::password_reader::PasswordReader;
 
 pub struct SafeCracker<'a> {
@@ -34,18 +35,19 @@ impl<'a> SafeCracker<'a> {
     /// Example usage:
     /// ```rust
     /// use ramensky::adaptor::custom::test_adaptor::TestAdaptor;
-    /// use ramensky::adaptor::safe_crack_result::SafeCrackResult;
+    /// use ramensky::adaptor::attempt_result::AttemptResult;
     /// use ramensky::safe_cracker::options::Options;
+    /// use ramensky::safe_cracker::password_crack_result::PasswordCrackResult;
     /// use ramensky::safe_cracker::safe_cracker::SafeCracker;
     ///
     /// let safe_cracker = SafeCracker::build(Options::default()).unwrap();
     /// let adaptor = TestAdaptor::new("abcde");
     /// match safe_cracker.start(adaptor).unwrap() {
-    ///     SafeCrackResult::Success => println!("Success!"),
-    ///     SafeCrackResult::Failure => println!("Failure!"),
+    ///     PasswordCrackResult::Success(pw, elapsed) => println!("Success! Password is {pw}. Execution took {} seconds", elapsed.as_secs()),
+    ///     PasswordCrackResult::Failure(elapsed) => println!("Failure. Execution took {} seconds", elapsed.as_secs()),
     /// }
     /// ```
-    pub fn start<T: BaseAdaptor>(self, adaptor: T) -> Result<SafeCrackResult, Box<dyn Error>> {
+    pub fn start<T: BaseAdaptor>(self, adaptor: T) -> Result<PasswordCrackResult, Box<dyn Error>> {
         println!("Starting attempt..");
         let now = Instant::now();
 
@@ -57,18 +59,22 @@ impl<'a> SafeCracker<'a> {
             let result = adaptor.try_password(&pw)?;
 
             match result {
-                SafeCrackResult::Success => {
-                    println!("Success! {pw} is the password.");
-                    println!("Execution took {} seconds.", now.elapsed().as_secs());
+                AttemptResult::Success => {
+                    if !self.options.quiet {
+                        println!("Success! {pw} is the password.");
+                        println!("Execution took {} seconds.", now.elapsed().as_secs());
+                    }
 
-                    return Ok(SafeCrackResult::Success);
+                    return Ok(PasswordCrackResult::Success(pw, now.elapsed()));
                 }
-                SafeCrackResult::Failure => continue,
+                AttemptResult::Failure => continue,
             }
         }
 
-        println!("Failure! Could not find the password.");
-        println!("Execution took {} seconds.", now.elapsed().as_secs());
-        Ok(SafeCrackResult::Failure)
+        if !self.options.quiet {
+            println!("Failure! Could not find the password.");
+            println!("Execution took {} seconds.", now.elapsed().as_secs());
+        }
+        Ok(PasswordCrackResult::Failure(now.elapsed()))
     }
 }
