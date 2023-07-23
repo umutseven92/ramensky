@@ -26,7 +26,7 @@ pub struct Options<'a> {
 
     /// Path to a custom passwords list. If provided, this will run first.
     /// The password list file needs to be newline separated list of passwords.
-    custom_pw_list_path: Option<&'a str>,
+    pub custom_pw_list_path: Option<&'a str>,
 }
 
 impl<'a> Options<'a> {
