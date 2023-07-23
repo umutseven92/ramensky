@@ -1,3 +1,5 @@
+//! Module containing the password cracker.
+
 use std::error::Error;
 use std::time::Instant;
 
@@ -20,6 +22,29 @@ impl<'a> SafeCracker<'a> {
         })
     }
 
+    /// Start password cracking.
+    /// This method will generate passwords, and call the adaptors `try_password()` method for each
+    /// password.
+    ///
+    /// The execution order is:
+    /// 1. Most common 10M passwords (skipped if not enabled in [Options](Options))
+    /// 2. Custom password list (skipped if not provided in [Options](Options))
+    /// 3. Brute forcing (skipped if not enabled in [Options](Options))
+    ///
+    /// Example usage:
+    /// ```rust
+    /// use ramensky::adaptor::custom::test_adaptor::TestAdaptor;
+    /// use ramensky::adaptor::safe_crack_result::SafeCrackResult;
+    /// use ramensky::safe_cracker::options::Options;
+    /// use ramensky::safe_cracker::safe_cracker::SafeCracker;
+    ///
+    /// let safe_cracker = SafeCracker::build(Options::default()).unwrap();
+    /// let adaptor = TestAdaptor::new("abcde");
+    /// match safe_cracker.start(adaptor).unwrap() {
+    ///     SafeCrackResult::Success => println!("Success!"),
+    ///     SafeCrackResult::Failure => println!("Failure!"),
+    /// }
+    /// ```
     pub fn start<T: BaseAdaptor>(self, adaptor: T) -> Result<SafeCrackResult, Box<dyn Error>> {
         println!("Starting attempt..");
         let now = Instant::now();
