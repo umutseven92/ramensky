@@ -10,6 +10,7 @@ use crate::safe_cracker::brute_forcer::BruteForcer;
 use crate::safe_cracker::options::Options;
 use crate::safe_cracker::password_crack_result::PasswordCrackResult;
 use crate::safe_cracker::password_reader::PasswordReader;
+use crate::safe_cracker::reader_configuration::PwListConfiguration;
 
 const COMMON_PW_PATH: &str = "resources/common-passwords.txt";
 
@@ -24,7 +25,13 @@ impl<'a> SafeCracker<'a> {
         let mut paths = vec![];
 
         if options.try_common_passwords {
-            paths.push(COMMON_PW_PATH);
+            if let Some(opt) = options.common_password_options {
+                paths.push(PwListConfiguration::new(COMMON_PW_PATH, opt.amount_to_use));
+            } else {
+                return Err(
+                    "common_password_options needs to set if try_common_passwords is enabled.",
+                )?;
+            }
         }
 
         if let Some(custom_path) = options.custom_pw_list_path {
@@ -33,7 +40,7 @@ impl<'a> SafeCracker<'a> {
                     "Custom password file path {custom_path} is not a valid file path."
                 ))?;
             }
-            paths.push(custom_path);
+            paths.push(PwListConfiguration::new(COMMON_PW_PATH, None));
         }
 
         let brute_forcer;
@@ -122,13 +129,22 @@ impl<'a> SafeCracker<'a> {
 #[cfg(test)]
 mod tests {
     use crate::adaptor::custom::test_adaptor::TestAdaptor;
+    use crate::safe_cracker::common_pw_list_options::CommonPwListOptions;
     use crate::safe_cracker::options::Options;
     use crate::safe_cracker::password_crack_result::PasswordCrackResult;
     use crate::safe_cracker::safe_cracker::SafeCracker;
 
     #[test]
     fn should_find_in_common_passwords() {
-        let safe_cracker = SafeCracker::build(Options::new(true, true, false, None, None)).unwrap();
+        let safe_cracker = SafeCracker::build(Options::new(
+            true,
+            true,
+            Some(CommonPwListOptions::default()),
+            false,
+            None,
+            None,
+        ))
+        .unwrap();
 
         // "qwerty" is the 4th item in the common passwords list.
         let adaptor = TestAdaptor::without_delay("qwerty");
@@ -152,16 +168,29 @@ mod tests {
             "/tests/resources/pw-list-wrong.txt"
         );
 
-        assert!(
-            SafeCracker::build(Options::new(true, false, false, None, Some(custom_path))).is_err()
-        )
+        assert!(SafeCracker::build(Options::new(
+            true,
+            false,
+            None,
+            false,
+            None,
+            Some(custom_path)
+        ))
+        .is_err())
     }
 
     #[test]
     fn should_find_in_custom_list() {
         let custom_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/resources/pw-list.txt");
-        let safe_cracker =
-            SafeCracker::build(Options::new(true, false, false, None, Some(custom_path))).unwrap();
+        let safe_cracker = SafeCracker::build(Options::new(
+            true,
+            false,
+            None,
+            false,
+            None,
+            Some(custom_path),
+        ))
+        .unwrap();
 
         // "test2" is contained in the custom password list.
         let adaptor = TestAdaptor::without_delay("test2");
