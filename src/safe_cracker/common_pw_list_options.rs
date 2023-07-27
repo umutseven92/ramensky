@@ -1,17 +1,17 @@
 use std::error::Error;
 
-const MAX_AMOUNT: usize = 10_000_000;
+const MAX_AMOUNT: usize = 1_000_000;
 
 #[derive(Copy, Clone)]
 pub struct CommonPwListOptions {
-    /// How many of the common password list to use. The maximum amount is 10 million.
+    /// How many of the common password list to use. The maximum amount is 1 million.
     /// Set as [`None`](Option::None) to use the whole list.
     pub amount_to_use: Option<usize>,
 }
 
 impl CommonPwListOptions {
     pub fn default() -> Self {
-        Self::build(Some(1_000_000)).unwrap()
+        Self::build(None).unwrap()
     }
 
     pub fn build(amount_to_use: Option<usize>) -> Result<Self, Box<dyn Error>> {
