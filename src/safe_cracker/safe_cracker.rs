@@ -2,50 +2,31 @@
 
 use std::error::Error;
 use std::path::Path;
-use std::sync::mpsc;
-use std::thread;
 use std::time::Instant;
 
 use crate::adaptor::attempt_result::AttemptResult;
 use crate::adaptor::base::BaseAdaptor;
 use crate::safe_cracker::brute_forcer::BruteForcer;
-use crate::safe_cracker::helpers::read_lines;
 use crate::safe_cracker::options::Options;
 use crate::safe_cracker::password_crack_result::PasswordCrackResult;
+use crate::safe_cracker::password_reader::PasswordReader;
+use crate::safe_cracker::reader_configuration::PwListConfiguration;
 
 const COMMON_PW_PATH: &str = "resources/common-passwords.txt";
 
 pub struct SafeCracker<'a> {
-    common_passwords: Option<Vec<String>>,
-    custom_passwords: Option<Vec<String>>,
+    password_reader: PasswordReader,
     brute_forcer: Option<BruteForcer>,
     options: Options<'a>,
 }
 
-#[macro_export]
-macro_rules! print_with_ts {
-    ($S:ident, $F:expr) => {
-        if !$S.options.quiet {
-            println!("{:?}\t{}", chrono::offset::Local::now(), $F);
-        }
-    };
-}
-
 impl<'a> SafeCracker<'a> {
     pub fn build(options: Options<'a>) -> Result<Self, Box<dyn Error>> {
-        let mut common_passwords: Option<Vec<String>> = None;
-        let mut custom_passwords: Option<Vec<String>> = None;
-        let mut brute_forcer: Option<BruteForcer> = None;
+        let mut paths = vec![];
 
         if options.try_common_passwords {
             if let Some(opt) = options.common_password_options {
-                let mut common_passwords_uncut = read_lines(COMMON_PW_PATH)?;
-
-                if let Some(amount) = opt.amount_to_use {
-                    common_passwords_uncut = common_passwords_uncut[..=amount].to_vec();
-                }
-
-                common_passwords = Some(common_passwords_uncut);
+                paths.push(PwListConfiguration::new(COMMON_PW_PATH, opt.amount_to_use));
             } else {
                 return Err(
                     "common_password_options needs to set if try_common_passwords is enabled.",
@@ -59,8 +40,10 @@ impl<'a> SafeCracker<'a> {
                     "Custom password file path {custom_path} is not a valid file path."
                 ))?;
             }
-            custom_passwords = Some(read_lines(custom_path)?);
+            paths.push(PwListConfiguration::new(COMMON_PW_PATH, None));
         }
+
+        let brute_forcer;
 
         if options.try_brute_forcing {
             if let Some(opt) = options.brute_forcing_options {
@@ -68,11 +51,12 @@ impl<'a> SafeCracker<'a> {
             } else {
                 return Err("brute_forcing_options needs to set if try_brute_forcing is enabled.")?;
             }
+        } else {
+            brute_forcer = None
         }
 
         Ok(Self {
-            common_passwords,
-            custom_passwords,
+            password_reader: PasswordReader::build(paths)?,
             brute_forcer,
             options,
         })
@@ -96,144 +80,49 @@ impl<'a> SafeCracker<'a> {
     ///
     /// let safe_cracker = SafeCracker::build(Options::default()).unwrap();
     /// let adaptor = TestAdaptor::without_delay("abcde");
-    /// match safe_cracker.start(&adaptor).unwrap() {
+    /// match safe_cracker.start(adaptor).unwrap() {
     ///     PasswordCrackResult::Success(pw, elapsed) => println!("Success! Password is {pw}. Execution took {} seconds", elapsed.as_secs()),
     ///     PasswordCrackResult::Failure(elapsed) => println!("Failure. Execution took {} seconds", elapsed.as_secs()),
     /// }
     /// ```
-    pub fn start<T: BaseAdaptor + Sync>(
-        &self,
-        adaptor: &T,
-    ) -> Result<PasswordCrackResult, Box<dyn Error>> {
-        print_with_ts!(self, "Starting attempt.");
-
-        let now = Instant::now();
-
-        // Common passwords
-        if let Some(success_result) = self.try_common_passwords(adaptor)? {
-            return Ok(success_result);
-        }
-
-        // Custom passwords
-        if let Some(success_result) = self.try_custom_password_list(adaptor)? {
-            return Ok(success_result);
-        }
-
-        print_with_ts!(self, "Failure! Could not find the password.");
-        print_with_ts!(
-            self,
-            format!("Total execution took {} seconds.", now.elapsed().as_secs())
-        );
-        Ok(PasswordCrackResult::Failure(now.elapsed()))
-    }
-
-    fn try_common_passwords<T: BaseAdaptor + Sync>(
-        &self,
-        adaptor: &T,
-    ) -> Result<Option<PasswordCrackResult>, Box<dyn Error>> {
-        if let Some(common_passwords) = &self.common_passwords {
-            print_with_ts!(
-                self,
-                format!("Trying {} common passwords.", common_passwords.len())
-            );
-            Ok(self.try_passwords(adaptor, common_passwords)?)
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn try_custom_password_list<T: BaseAdaptor + Sync>(
-        &self,
-        adaptor: &T,
-    ) -> Result<Option<PasswordCrackResult>, Box<dyn Error>> {
-        if let Some(custom_password_list) = &self.custom_passwords {
-            print_with_ts!(
-                self,
-                format!("Trying {} custom passwords.", custom_password_list.len())
-            );
-
-            Ok(self.try_passwords(adaptor, custom_password_list)?)
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn try_passwords<T: BaseAdaptor + Sync>(
-        &self,
-        adaptor: &T,
-        password_list: &Vec<String>,
-    ) -> Result<Option<PasswordCrackResult>, Box<dyn Error>> {
-        let now = Instant::now();
-
-        let result = self.try_password_list(adaptor, &password_list)?;
-
-        match result {
-            Some(pw) => {
-                print_with_ts!(self, format!("Success! {pw} is the password."));
-                print_with_ts!(
-                    self,
-                    format!("Execution took {} seconds.", now.elapsed().as_secs())
-                );
-
-                Ok(Some(PasswordCrackResult::Success(pw, now.elapsed())))
-            }
-            None => {
-                print_with_ts!(
-                    self,
-                    "Failure! Could not find the password in custom passwords. Moving on.."
-                );
-                print_with_ts!(
-                    self,
-                    format!("Execution took {} seconds.", now.elapsed().as_secs())
-                );
-
-                Ok(None)
-            }
-        }
-    }
-
-    fn try_password_list<T: BaseAdaptor + Sync>(
-        &self,
-        adaptor: &T,
-        password_list: &Vec<String>,
-    ) -> Result<Option<String>, Box<dyn Error>> {
-        let (tx, rx) = mpsc::channel();
-
-        thread::scope(|scope| {
-            scope.spawn(move || {
-                for pw in password_list {
-                    print_with_ts!(self, format!("Trying password {pw}"));
-
-                    let result = adaptor.try_password(pw).unwrap();
-
-                    match result {
-                        AttemptResult::Success => {
-                            tx.send(Some(String::from("test"))).unwrap();
-                        }
-                        AttemptResult::Failure => continue,
-                    }
+    pub fn start<T: BaseAdaptor>(self, adaptor: T) -> Result<PasswordCrackResult, Box<dyn Error>> {
+        macro_rules! print_with_ts {
+            ($F:expr) => {
+                if !self.options.quiet {
+                    println!("{:?}\t{}", chrono::offset::Local::now(), $F);
                 }
+            };
+        }
 
-                tx.send(Some(String::from("test"))).unwrap();
-            });
-        });
+        print_with_ts!("Starting attempt");
 
-        let received = rx.recv().unwrap();
+        let now = Instant::now();
 
-        // for pw in password_list {
-        //     print_with_ts!(self, format!("Trying password {pw}"));
-        //
-        //     let result = adaptor.try_password(pw)?;
-        //
-        //     match result {
-        //         AttemptResult::Success => {
-        //             return Ok(Some(pw.clone()));
-        //         }
-        //         AttemptResult::Failure => continue,
-        //     }
-        // }
+        for pw in self.password_reader {
+            print_with_ts!(format!("Trying password {pw}"));
 
-        Ok(None)
+            let result = adaptor.try_password(&pw)?;
+
+            match result {
+                AttemptResult::Success => {
+                    print_with_ts!(format!("Success! {pw} is the password."));
+                    print_with_ts!(format!(
+                        "Execution took {} seconds.",
+                        now.elapsed().as_secs()
+                    ));
+
+                    return Ok(PasswordCrackResult::Success(pw, now.elapsed()));
+                }
+                AttemptResult::Failure => continue,
+            }
+        }
+
+        print_with_ts!("Failure! Could not find the password.");
+        print_with_ts!(format!(
+            "Execution took {} seconds.",
+            now.elapsed().as_secs()
+        ));
+        Ok(PasswordCrackResult::Failure(now.elapsed()))
     }
 }
 
@@ -260,7 +149,7 @@ mod tests {
         // "qwerty" is the 4th item in the common passwords list.
         let adaptor = TestAdaptor::without_delay("qwerty");
 
-        let result = safe_cracker.start(&adaptor).unwrap();
+        let result = safe_cracker.start(adaptor).unwrap();
 
         match result {
             PasswordCrackResult::Success(pw, _) => {
@@ -306,7 +195,7 @@ mod tests {
         // "test2" is contained in the custom password list.
         let adaptor = TestAdaptor::without_delay("test2");
 
-        let result = safe_cracker.start(&adaptor).unwrap();
+        let result = safe_cracker.start(adaptor).unwrap();
 
         match result {
             PasswordCrackResult::Success(pw, _) => {
