@@ -7,7 +7,7 @@ Rust.
 
 Add the following to your `Cargo.toml`:
 
-```bash
+```toml
 [dependencies]
 ramensky = { git = "https://github.com/umutseven92/ramensky.git" }
 ```
@@ -18,7 +18,7 @@ ramensky = { git = "https://github.com/umutseven92/ramensky.git" }
 
 First, create an adaptor in your project, inheriting from [`BaseAdaptor`](src/adaptor/base.rs), fit for your purposes.
 
-Example (['ZipAdaptor`](src/adaptor/custom/zip_adaptor.rs)):
+Example of a [custom adaptor](src/adaptor/custom/zip_adaptor.rs):
 
 ```rust
 //! ZipAdaptor is an adaptor for decrypting password protected zip archives.
