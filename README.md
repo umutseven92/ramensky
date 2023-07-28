@@ -60,8 +60,8 @@ To use it with default options:
 let safe_cracker = SafeCracker::build(Options::default ()).unwrap();
 let adaptor = TestAdaptor::without_delay("abcde");
 match safe_cracker.start(adaptor).unwrap() {
-PasswordCrackResult::Success(pw, elapsed) => println! ("Success! Password is {pw}. Execution took {} seconds", elapsed.as_secs()),
-PasswordCrackResult::Failure(elapsed) => println !("Failure. Execution took {} seconds", elapsed.as_secs()),
+    PasswordCrackResult::Success(pw, elapsed) => println! ("Success! Password is {pw}. Execution took {} seconds", elapsed.as_secs()),
+    PasswordCrackResult::Failure(elapsed) => println !("Failure. Execution took {} seconds", elapsed.as_secs()),
 }
 ```
 
@@ -71,7 +71,12 @@ To see all available options, please see [`Options`](src/safe_cracker/options.rs
 
 With default settings, Ramensky will:
 
-1. Try the most common 1 million passwords,
+1. Try the most common 1 million passwords (sourced from [here](https://github.com/danielmiessler/SecLists/blob/master/Passwords/Common-Credentials/10-million-password-list-top-1000000.txt)),
 2. Try the passwords from the custom password list, if provided,
 3. Try to brute force the password.
 
+## ToDo
+
+- [ ] Parallelization of execution
+- [ ] Brute forcing step
+- [ ] Save / load states
