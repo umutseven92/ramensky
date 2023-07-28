@@ -57,8 +57,9 @@ impl<'a> BaseAdaptor for ZipAdaptor<'a> {
 To use it with default options:
 
 ```rust
-let safe_cracker = SafeCracker::build(Options::default ()).unwrap();
-let adaptor = TestAdaptor::without_delay("abcde");
+let safe_cracker = SafeCracker::build(Options::default()).unwrap();
+let adaptor = TestAdaptor::without_delay("password123");
+
 match safe_cracker.start(adaptor).unwrap() {
     PasswordCrackResult::Success(pw, elapsed) => println! ("Success! Password is {pw}. Execution took {} seconds", elapsed.as_secs()),
     PasswordCrackResult::Failure(elapsed) => println !("Failure. Execution took {} seconds", elapsed.as_secs()),
